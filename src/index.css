@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "IBM Plex Sans Thai", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --color-ink-950: #0B0E14;
+  --color-ink-900: #10141F;
+  --color-ink-800: #171D2E;
+  --color-ink-700: #232B42;
+  --color-ink-600: #35405F;
+  --color-ink-300: #8B96B5;
+  --color-ink-100: #E4E9F5;
+
+  --color-brand-400: #818CF8;
+  --color-brand-500: #6366F1;
+  --color-brand-600: #4F46E5;
+  --color-glow-400: #E879F9;
+  --color-glow-500: #D946EF;
+  --color-mint-400: #34D399;
+  --color-amber-400: #FBBF24;
+}
+
+html { background: #0B0E14; }
+body { font-family: var(--font-sans); }
+
+::selection { background: #6366F1; color: white; }
+
+.scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+.scroll-thin::-webkit-scrollbar-thumb { background: #35405F; border-radius: 4px; }
+.scroll-thin::-webkit-scrollbar-track { background: transparent; }
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+.animate-pulse-soft { animation: pulse-soft 1.6s ease-in-out infinite; }
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-rise { animation: rise-in .35s ease-out both; }
