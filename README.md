@@ -1,5 +1,7 @@
 # 🏭 Workflow → App Studio
 
+🌐 **ใช้งานได้เลยที่:** https://workflow-app-studio-chawanansuk-7902s-projects.vercel.app
+
 เว็บแอปที่แปลง **workflow prompt** (prompt แบบมี step / STOP-gate / persona / กฎต่างๆ)
 ให้กลายเป็น **เว็บแอปจริง** ผ่านกระบวนการ vibe coding บน Google AI Studio — ครบทั้ง 5 ขั้นตอน
 โดยยึดหลัก *"ทุกการตัดสินใจคือปุ่ม ทุกคำถามคือฟอร์ม ไม่มี free-text chat"*
