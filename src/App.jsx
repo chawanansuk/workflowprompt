@@ -15,6 +15,7 @@ import {
   mockupRevisionSystem, mockupRevisionUser,
   buildPromptSystem, buildUser,
   followupSystem, followupUser,
+  enhanceSystem,
 } from './lib/prompts.js'
 
 const STORAGE = 'wtas_project_v1'
@@ -22,7 +23,7 @@ const STORAGE = 'wtas_project_v1'
 const initialState = {
   step: 1,
   maxStep: 1,
-  input: { workflowPrompt: '', appName: '', features: '', themePreset: '', themeCustom: '' },
+  input: { workflowPrompt: '', appName: '', features: '', themePreset: '', themeCustom: '', capabilities: [] },
   blueprint: null,
   mockupPrompt: '',
   mockupImage: null,
@@ -35,7 +36,9 @@ function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE)
     if (!raw) return initialState
-    return { ...initialState, ...JSON.parse(raw) }
+    const parsed = JSON.parse(raw)
+    // Deep-merge input so fields added in newer versions get their defaults.
+    return { ...initialState, ...parsed, input: { ...initialState.input, ...(parsed.input || {}) } }
   } catch {
     return initialState
   }
@@ -79,6 +82,23 @@ export default function App() {
     }
   }
 
+  // ---- Step 1: enhance a rough idea into a full workflow prompt ----
+  const [enhancing, setEnhancing] = useState(false)
+  const [enhanceError, setEnhanceError] = useState('')
+  const enhanceWorkflow = async () => {
+    if (!hasApiKey()) { setKeyModal(true); return }
+    setEnhancing(true)
+    setEnhanceError('')
+    try {
+      const improved = await generateText({ system: enhanceSystem, user: state.input.workflowPrompt })
+      setState((s) => ({ ...s, input: { ...s.input, workflowPrompt: improved } }))
+    } catch (err) {
+      setEnhanceError(friendlyError(err))
+    } finally {
+      setEnhancing(false)
+    }
+  }
+
   // ---- Step 1 → 2 ----
   // A new analysis starts a new design: every downstream artifact must be
   // invalidated, otherwise steps 3-5 keep serving the previous blueprint's output.
@@ -90,11 +110,11 @@ export default function App() {
       iterations: [], finished: false,
     })
     run(analyzeWorkflow, async () => {
-      const { workflowPrompt, appName, features, themePreset, themeCustom } = state.input
+      const { workflowPrompt, appName, features, themePreset, themeCustom, capabilities } = state.input
       const theme = themePreset === 'อื่นๆ' ? themeCustom : themePreset
       const blueprint = await generateText({
         system: blueprintSystem,
-        user: blueprintUser({ workflowPrompt, appName, theme, features }),
+        user: blueprintUser({ workflowPrompt, appName, theme, features, capabilities }),
         json: true,
         schema: BLUEPRINT_SCHEMA,
       })
@@ -170,7 +190,11 @@ export default function App() {
     run(generateBuildPrompt, async () => {
       const buildPrompt = await generateText({
         system: buildPromptSystem,
-        user: buildUser({ workflowPrompt: state.input.workflowPrompt, blueprint: state.blueprint }),
+        user: buildUser({
+          workflowPrompt: state.input.workflowPrompt,
+          blueprint: state.blueprint,
+          capabilities: state.input.capabilities,
+        }),
       })
       patch({ buildPrompt })
     })
@@ -201,6 +225,33 @@ export default function App() {
 
   const retry = () => { setError(''); lastAction?.() }
 
+  // Project backup/restore — generated prompts are work products worth keeping.
+  const exportProject = () => {
+    const { mockupImage, ...rest } = state
+    const blob = new Blob([JSON.stringify(rest, null, 2)], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `${(state.blueprint?.appConcept?.name || 'workflow-app').replace(/\s+/g, '-')}-project.json`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  const importProject = (file) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result)
+        if (typeof data.step !== 'number' || !data.input) throw new Error('bad file')
+        setState({ ...initialState, ...data, mockupImage: null })
+        setError('')
+        setImageError('')
+      } catch {
+        alert('ไฟล์นี้ไม่ใช่โปรเจกต์ของ Workflow → App Studio')
+      }
+    }
+    reader.readAsText(file)
+  }
+
   return (
     <div className="min-h-screen text-ink-100">
       {/* header */}
@@ -223,6 +274,16 @@ export default function App() {
           >
             🔑 API Key {hasApiKey() ? '✓' : '· ยังไม่ได้ตั้งค่า'}
           </button>
+          <button onClick={exportProject} title="ดาวน์โหลดโปรเจกต์เป็นไฟล์ .json"
+            className="px-2.5 py-1.5 rounded-lg text-sm border border-ink-600 text-ink-300 hover:text-ink-100 hover:border-ink-300 transition">
+            ⬇️
+          </button>
+          <label title="เปิดโปรเจกต์จากไฟล์ .json"
+            className="px-2.5 py-1.5 rounded-lg text-sm border border-ink-600 text-ink-300 hover:text-ink-100 hover:border-ink-300 transition cursor-pointer">
+            ⬆️
+            <input type="file" accept="application/json,.json" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) importProject(f); e.target.value = '' }} />
+          </label>
           <button onClick={restart} className="px-3 py-1.5 rounded-lg text-sm border border-ink-600 text-ink-300 hover:text-ink-100 hover:border-ink-300 transition">
             🆕 เริ่มใหม่
           </button>
@@ -239,6 +300,9 @@ export default function App() {
             data={state.input}
             onChange={(input) => patch({ input })}
             onNext={analyzeWorkflow}
+            onEnhance={enhanceWorkflow}
+            enhancing={enhancing}
+            enhanceError={enhanceError}
           />
         )}
 
@@ -264,6 +328,7 @@ export default function App() {
             imageError={imageError}
             onRetry={retry}
             onGenerate={generateMockupPrompt}
+            onEditPrompt={(t) => patch({ mockupPrompt: t, mockupImage: null, buildPrompt: '' })}
             onSetImage={(img) => patch({ mockupImage: img })}
             onGenerateInApp={generateMockupInApp}
             onApprove={approveMockup}
@@ -279,6 +344,7 @@ export default function App() {
             error={error}
             onRetry={retry}
             onGenerate={generateBuildPrompt}
+            onEditPrompt={(t) => patch({ buildPrompt: t })}
             onNext={() => patch({ step: 5, maxStep: Math.max(state.maxStep, 5) })}
           />
         )}

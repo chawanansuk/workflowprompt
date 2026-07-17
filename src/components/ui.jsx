@@ -109,7 +109,7 @@ export function ChipGroup({ options, value, custom, onSelect, otherPlaceholder =
  * Shared revision panel: preset chips (+ อื่นๆ) with a free notes field.
  * Submit is enabled only when the combined revision text is non-empty.
  */
-export function RevisionForm({ icon = '🛠', title, presets, notesPlaceholder, submitLabel, onSubmit, onCancel }) {
+export function RevisionForm({ icon = '🛠', title, presets, notesPlaceholder, submitLabel, warning, onSubmit, onCancel }) {
   const [preset, setPreset] = useState('')
   const [custom, setCustom] = useState('')
   const [notes, setNotes] = useState('')
@@ -119,6 +119,11 @@ export function RevisionForm({ icon = '🛠', title, presets, notesPlaceholder, 
 
   return (
     <SectionCard icon={icon} title={title} className="animate-rise">
+      {warning && (
+        <div className="mb-3 rounded-xl bg-amber-400/10 border border-amber-400/30 px-4 py-2.5 text-sm text-amber-400">
+          ⚠️ {warning}
+        </div>
+      )}
       <ChipGroup
         options={presets}
         value={preset}
@@ -136,6 +141,36 @@ export function RevisionForm({ icon = '🛠', title, presets, notesPlaceholder, 
         </PrimaryButton>
       </div>
     </SectionCard>
+  )
+}
+
+/**
+ * Power-user tools under a generated prompt: regenerate a fresh variant, or
+ * hand-edit the prompt directly (pattern from v0/Lovable-style builders).
+ */
+export function PromptTools({ text, onSave, onRegenerate, regenerateLabel = '🔄 สร้างใหม่ทั้งฉบับ' }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  if (editing) {
+    return (
+      <SectionCard icon="✏️" title="แก้ prompt เอง" className="animate-rise">
+        <TextArea value={draft} onChange={setDraft} rows={12} mono />
+        <div className="mt-3 flex gap-3 justify-end">
+          <GhostButton onClick={() => setEditing(false)}>ยกเลิก</GhostButton>
+          <PrimaryButton onClick={() => { onSave(draft); setEditing(false) }} disabled={!draft.trim()}>
+            💾 ใช้ฉบับที่แก้
+          </PrimaryButton>
+        </div>
+      </SectionCard>
+    )
+  }
+  return (
+    <div className="flex flex-wrap gap-2 justify-end">
+      <GhostButton className="!px-4 !py-2 text-sm" onClick={() => { setDraft(text); setEditing(true) }}>
+        ✏️ แก้ prompt เอง
+      </GhostButton>
+      <GhostButton className="!px-4 !py-2 text-sm" onClick={onRegenerate}>{regenerateLabel}</GhostButton>
+    </div>
   )
 }
 
@@ -190,14 +225,40 @@ export function CopyBlock({ text, label = 'คัดลอก prompt' }) {
   )
 }
 
-export function Loading({ message }) {
+/**
+ * Loading state for 20-40s AI operations. With `messages` (array of stages)
+ * it renders an NN/g-style step checklist that ticks progressively, plus an
+ * elapsed-time counter — spinner-only is appropriate just for short waits.
+ */
+export function Loading({ message, messages }) {
+  const lines = messages && messages.length ? messages : message ? [message] : []
+  const [elapsed, setElapsed] = useState(0)
+  React.useEffect(() => {
+    const t = setInterval(() => setElapsed((s) => s + 1), 1000)
+    return () => clearInterval(t)
+  }, [])
+  const active = Math.min(Math.floor(elapsed / 5), lines.length - 1)
+
   return (
-    <div className="flex flex-col items-center gap-4 py-16 animate-rise">
+    <div className="flex flex-col items-center gap-5 py-14 animate-rise">
       <div className="relative h-14 w-14">
         <div className="absolute inset-0 rounded-full border-4 border-ink-700" />
         <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-brand-400 border-r-glow-400 animate-spin" />
       </div>
-      <div className="text-ink-300 animate-pulse-soft">{message}</div>
+      {lines.length > 1 ? (
+        <div className="space-y-1.5 text-sm text-left">
+          {lines.map((line, i) => (
+            <div key={i} className={`flex items-center gap-2 transition
+              ${i < active ? 'text-mint-400' : i === active ? 'text-ink-100 animate-pulse-soft' : 'text-ink-300/40'}`}>
+              <span className="w-4 text-center">{i < active ? '✓' : i === active ? '▸' : '·'}</span>
+              {line}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-ink-300 animate-pulse-soft text-center px-4">{lines[0]}</div>
+      )}
+      <div className="text-xs text-ink-300/60">ผ่านไป {elapsed} วินาที · ปกติใช้เวลา 20–40 วินาที</div>
     </div>
   )
 }

@@ -17,7 +17,15 @@ const REVISION_PRESETS = ['เปลี่ยนโทนสี/ธีม', 'ล
 export default function Step2Blueprint({ blueprint, loading, error, onRetry, onGenerate, onApprove, onRevise }) {
   const [revising, setRevising] = useState(false)
 
-  if (loading) return <Loading message="ดีไซเนอร์กำลังแกะ workflow และร่างพิมพ์เขียวแอปทั้งระบบ... (ราว 20–40 วินาที)" />
+  if (loading) {
+    return <Loading messages={[
+      'อ่าน workflow prompt ทั้งก้อน...',
+      'แกะ step, STOP-gate และกฎเหล็กทั้งหมด...',
+      'แปลงทุกคำถามเป็นฟอร์ม ทุกการตัดสินใจเป็นปุ่ม...',
+      'เลือก palette, ฟอนต์ และ mood ที่เข้ากับบุคลิก workflow...',
+      'ตัดขอบเขต MVP ให้คมและประกอบพิมพ์เขียว...',
+    ]} />
+  }
   if (error) return <ErrorBox message={error} onRetry={onRetry} />
   if (!blueprint) {
     return (
@@ -132,6 +140,7 @@ export default function Step2Blueprint({ blueprint, loading, error, onRetry, onG
           presets={REVISION_PRESETS}
           notesPlaceholder="รายละเอียดเพิ่มเติม (ถ้ามี) เช่น หน้าจอที่ 2 อยากให้รวมกับหน้าจอที่ 3..."
           submitLabel="🔄 ปรับ blueprint ตามนี้"
+          warning="การปรับ blueprint จะล้าง mockup prompt และ build prompt เดิม แล้วสร้างใหม่จากดีไซน์ล่าสุดให้อัตโนมัติ"
           onCancel={() => setRevising(false)}
           onSubmit={(notes) => { setRevising(false); onRevise(notes) }}
         />

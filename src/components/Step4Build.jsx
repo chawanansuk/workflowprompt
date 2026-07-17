@@ -1,8 +1,16 @@
 import React from 'react'
-import { PrimaryButton, CopyBlock, Loading, ErrorBox, SectionCard, GhostButton, MissingContent } from './ui.jsx'
+import { PrimaryButton, CopyBlock, Loading, ErrorBox, SectionCard, GhostButton, MissingContent, PromptTools } from './ui.jsx'
 
-export default function Step4Build({ buildPrompt, appName, loading, error, onRetry, onGenerate, onNext }) {
-  if (loading) return <Loading message="กำลังประกอบ build prompt ฉบับสมบูรณ์ — ฝังกฎทุกข้อของ workflow เดิมลงไป..." />
+export default function Step4Build({ buildPrompt, appName, loading, error, onRetry, onGenerate, onEditPrompt, onNext }) {
+  if (loading) {
+    return <Loading messages={[
+      'รวบกฎศักดิ์สิทธิ์จาก workflow ต้นฉบับเป็น CORE PHILOSOPHY...',
+      'เขียนสเปกทีละหน้าจอตาม blueprint ที่อนุมัติ...',
+      'กำหนด AI call แต่ละจุด พร้อม JSON schema...',
+      'ตรวจว่าไม่มี placeholder หลงเหลือ...',
+      'ประกอบเป็น build prompt ก้อนเดียวพร้อมวาง...',
+    ]} />
+  }
   if (error) return <ErrorBox message={error} onRetry={onRetry} />
   if (!buildPrompt) {
     return (
@@ -31,6 +39,7 @@ export default function Step4Build({ buildPrompt, appName, loading, error, onRet
       </header>
 
       <CopyBlock text={buildPrompt} label="คัดลอก build prompt" />
+      <PromptTools text={buildPrompt} onSave={onEditPrompt} onRegenerate={onGenerate} />
 
       <SectionCard icon="🚀" title="ขั้นตอนการ build">
         <ol className="text-sm text-ink-100/90 space-y-2 list-decimal list-inside">
@@ -38,6 +47,10 @@ export default function Step4Build({ buildPrompt, appName, loading, error, onRet
           <li><b>แนบภาพ mockup ที่อนุมัติจากขั้นที่ 3</b> ไปพร้อมกับ prompt แล้วบอก AI Studio ให้ยึดดีไซน์ตามภาพนี้เป๊ะๆ</li>
           <li>วาง build prompt แล้วกด generate — รอแอปประกอบร่าง</li>
         </ol>
+        <div className="mt-3 rounded-xl bg-brand-600/10 border border-brand-400/30 px-4 py-2.5 text-sm text-brand-400">
+          💡 เคล็ดลับมือโปร: ถ้าตั้งใจจะแก้หลายรอบ ให้คัดส่วน CORE PHILOSOPHY จาก prompt
+          ไปวางใน <b>System Instructions</b> ของ AI Studio ด้วย — กฎจะคงอยู่ทุกรอบการแก้ ไม่หลุดตามบทสนทนา
+        </div>
       </SectionCard>
 
       <div className="flex flex-wrap gap-3 justify-end">

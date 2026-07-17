@@ -1,15 +1,22 @@
 import React, { useState } from 'react'
-import { PrimaryButton, GhostButton, CopyBlock, Loading, ErrorBox, SectionCard, UploadZone, RevisionForm, MissingContent } from './ui.jsx'
+import { PrimaryButton, GhostButton, CopyBlock, Loading, ErrorBox, SectionCard, UploadZone, RevisionForm, MissingContent, PromptTools } from './ui.jsx'
 
 const MOCKUP_REVISION_PRESETS = ['สีเพี้ยนจากที่ตั้งใจ', 'เลย์เอาต์แน่น/รกไป', 'อยากได้อารมณ์หรูขึ้น', 'สัดส่วนหน้าจอไม่สมจริง']
 
 export default function Step3Mockup({
   mockupPrompt, mockupImage, loading, imageLoading, error, imageError,
-  onRetry, onGenerate, onSetImage, onGenerateInApp, onApprove, onRevise,
+  onRetry, onGenerate, onSetImage, onGenerateInApp, onApprove, onRevise, onEditPrompt,
 }) {
   const [revising, setRevising] = useState(false)
 
-  if (loading) return <Loading message="กำลังเขียน image prompt ระดับ Dribbble ให้... " />
+  if (loading) {
+    return <Loading messages={[
+      'อ่าน blueprint ที่อนุมัติไว้ทุกหน้าจอ...',
+      'แปลงทุก control เป็นคำบรรยายภาพ...',
+      'ใส่ hex สี ฟอนต์ และ mood ลงใน prompt...',
+      'ขัดเกลาให้เป็นบอร์ดพรีเซนต์ระดับ Dribbble...',
+    ]} />
+  }
   // A global error with no prompt on screen is fatal for this step; once a
   // prompt exists, errors render inline so the copy-paste path stays usable.
   if (error && !mockupPrompt) return <ErrorBox message={error} onRetry={onRetry} />
@@ -33,6 +40,7 @@ export default function Step3Mockup({
       {error && <ErrorBox message={error} onRetry={onRetry} />}
 
       <CopyBlock text={mockupPrompt} label="คัดลอก image prompt" />
+      <PromptTools text={mockupPrompt} onSave={onEditPrompt} onRegenerate={onGenerate} />
 
       <SectionCard icon="📋" title="วิธีใช้">
         <ol className="text-sm text-ink-100/90 space-y-1.5 list-decimal list-inside">
@@ -79,6 +87,7 @@ export default function Step3Mockup({
           presets={MOCKUP_REVISION_PRESETS}
           notesPlaceholder="รายละเอียด เช่น หน้าจอซ้ายบนปุ่มใหญ่ไป อยากให้พื้นหลังเข้มกว่านี้..."
           submitLabel="🔄 เขียน image prompt ใหม่ตามนี้"
+          warning="การแก้ image prompt จะล้างภาพเดิมและ build prompt เดิม เพื่อให้ทุกอย่างตรงกับดีไซน์ล่าสุดเสมอ"
           onCancel={() => setRevising(false)}
           onSubmit={(notes) => { setRevising(false); onRevise(notes) }}
         />
