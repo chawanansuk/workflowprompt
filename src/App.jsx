@@ -6,7 +6,7 @@ import Step3Mockup from './components/Step3Mockup.jsx'
 import Step4Build from './components/Step4Build.jsx'
 import Step5Iterate from './components/Step5Iterate.jsx'
 import { GhostButton } from './components/ui.jsx'
-import { generateText, generateImage, friendlyError, hasApiKey } from './lib/gemini.js'
+import { generateText, generateImage, friendlyError, hasApiKey, validateBlueprint } from './lib/gemini.js'
 import {
   BLUEPRINT_SCHEMA,
   blueprintSystem, blueprintUser,
@@ -46,15 +46,21 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [imageLoading, setImageLoading] = useState(false)
   const [error, setError] = useState('')
+  const [imageError, setImageError] = useState('')
   const [lastAction, setLastAction] = useState(null) // for retry
   const [keyModal, setKeyModal] = useState(false)
 
   useEffect(() => {
-    try {
-      // Persist everything except heavy images to stay within localStorage quota.
-      const { mockupImage, ...rest } = state
-      localStorage.setItem(STORAGE, JSON.stringify(rest))
-    } catch { /* quota exceeded — skip persistence silently */ }
+    // Debounced persistence: typing in Step 1 patches state per keystroke, and a
+    // full-state JSON.stringify + sync localStorage write per keypress lags input.
+    const t = setTimeout(() => {
+      try {
+        // Persist everything except heavy images to stay within localStorage quota.
+        const { mockupImage, ...rest } = state
+        localStorage.setItem(STORAGE, JSON.stringify(rest))
+      } catch { /* quota exceeded — skip persistence silently */ }
+    }, 400)
+    return () => clearTimeout(t)
   }, [state])
 
   const patch = (p) => setState((s) => ({ ...s, ...p }))
@@ -74,9 +80,15 @@ export default function App() {
   }
 
   // ---- Step 1 → 2 ----
+  // A new analysis starts a new design: every downstream artifact must be
+  // invalidated, otherwise steps 3-5 keep serving the previous blueprint's output.
   const analyzeWorkflow = () => {
     if (!hasApiKey()) { setKeyModal(true); return }
-    patch({ step: 2, maxStep: Math.max(state.maxStep, 2) })
+    patch({
+      step: 2, maxStep: 2,
+      blueprint: null, mockupPrompt: '', mockupImage: null, buildPrompt: '',
+      iterations: [], finished: false,
+    })
     run(analyzeWorkflow, async () => {
       const { workflowPrompt, appName, features, themePreset, themeCustom } = state.input
       const theme = themePreset === 'อื่นๆ' ? themeCustom : themePreset
@@ -86,6 +98,7 @@ export default function App() {
         json: true,
         schema: BLUEPRINT_SCHEMA,
       })
+      if (!validateBlueprint(blueprint)) throw new Error('PARSE_FAILED')
       patch({ blueprint })
     })
   }
@@ -98,7 +111,9 @@ export default function App() {
         json: true,
         schema: BLUEPRINT_SCHEMA,
       })
-      patch({ blueprint })
+      if (!validateBlueprint(blueprint)) throw new Error('PARSE_FAILED')
+      // Blueprint changed → mockup/build prompts describe the old design; drop them.
+      patch({ blueprint, mockupPrompt: '', mockupImage: null, buildPrompt: '', maxStep: 2 })
     })
 
   // ---- Step 2 → 3 ----
@@ -122,19 +137,24 @@ export default function App() {
         system: mockupRevisionSystem,
         user: mockupRevisionUser({ blueprint: state.blueprint, previousPrompt: state.mockupPrompt, notes }),
       })
-      patch({ mockupPrompt, mockupImage: null })
+      // The build prompt must match the approved mockup — invalidate it too.
+      patch({ mockupPrompt, mockupImage: null, buildPrompt: '', maxStep: 3 })
     })
 
+  // Uses its own error channel so a failed optional image experiment never
+  // hides the primary copy-paste workflow of step 3.
   const generateMockupInApp = async () => {
     if (!hasApiKey()) { setKeyModal(true); return }
+    const promptAtCall = state.mockupPrompt
     setImageLoading(true)
-    setError('')
+    setImageError('')
     try {
-      const img = await generateImage(state.mockupPrompt)
-      patch({ mockupImage: img })
+      const img = await generateImage(promptAtCall)
+      // The prompt may have been revised while the image was rendering — a stale
+      // image must not attach itself to the new prompt.
+      setState((s) => (s.mockupPrompt === promptAtCall ? { ...s, mockupImage: img } : s))
     } catch (err) {
-      setError(friendlyError(err))
-      setLastAction(() => generateMockupInApp)
+      setImageError(friendlyError(err))
     } finally {
       setImageLoading(false)
     }
@@ -171,6 +191,7 @@ export default function App() {
     localStorage.removeItem(STORAGE)
     setState(initialState)
     setError('')
+    setImageError('')
   }
 
   const jump = (n) => {
@@ -227,6 +248,7 @@ export default function App() {
             loading={loading}
             error={error}
             onRetry={retry}
+            onGenerate={analyzeWorkflow}
             onApprove={approveBlueprint}
             onRevise={reviseBlueprint}
           />
@@ -239,7 +261,9 @@ export default function App() {
             loading={loading}
             imageLoading={imageLoading}
             error={error}
+            imageError={imageError}
             onRetry={retry}
+            onGenerate={generateMockupPrompt}
             onSetImage={(img) => patch({ mockupImage: img })}
             onGenerateInApp={generateMockupInApp}
             onApprove={approveMockup}
@@ -254,6 +278,7 @@ export default function App() {
             loading={loading}
             error={error}
             onRetry={retry}
+            onGenerate={generateBuildPrompt}
             onNext={() => patch({ step: 5, maxStep: Math.max(state.maxStep, 5) })}
           />
         )}
@@ -266,13 +291,14 @@ export default function App() {
             onRetry={retry}
             onGenerate={generateFollowup}
             onFinish={() => patch({ finished: true })}
+            onUnfinish={() => patch({ finished: false })}
             finished={state.finished}
             onRestart={restart}
           />
         )}
 
-        {/* back navigation */}
-        {state.step > 1 && !loading && !state.finished && (
+        {/* back navigation (hidden only on the finished celebration screen itself) */}
+        {state.step > 1 && !loading && !(state.finished && state.step === 5) && (
           <div className="mt-8">
             <GhostButton onClick={() => jump(state.step - 1)} className="!px-4 !py-2 text-sm">
               ← กลับขั้นที่ {state.step - 1} ({STEPS[state.step - 2].label})
@@ -285,7 +311,8 @@ export default function App() {
         ทุกการตัดสินใจคือปุ่ม · ทุกคำถามคือฟอร์ม · กฎของ workflow เดิมศักดิ์สิทธิ์เสมอ
       </footer>
 
-      <ApiKeyModal open={keyModal} onClose={() => setKeyModal(false)} />
+      {/* Mounted only while open so the key field re-reads storage on each open */}
+      {keyModal && <ApiKeyModal open onClose={() => setKeyModal(false)} />}
     </div>
   )
 }

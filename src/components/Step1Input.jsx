@@ -6,7 +6,8 @@ const THEME_PRESETS = ['มินิมอล สว่าง สะอาดต
 export default function Step1Input({ data, onChange, onNext }) {
   const set = (patch) => onChange({ ...data, ...patch })
   const themeValue = data.themePreset === 'อื่นๆ' ? (data.themeCustom || '') : data.themePreset
-  const ready = data.workflowPrompt.trim().length >= 40
+  const promptLen = data.workflowPrompt.trim().length
+  const ready = promptLen >= 40
 
   return (
     <div className="space-y-6 animate-rise">
@@ -26,7 +27,7 @@ export default function Step1Input({ data, onChange, onNext }) {
           rows={12}
           mono
         />
-        <div className="mt-1 text-xs text-ink-300 text-right">{data.workflowPrompt.trim().length.toLocaleString()} ตัวอักษร</div>
+        <div className="mt-1 text-xs text-ink-300 text-right">{promptLen.toLocaleString()} ตัวอักษร</div>
       </SectionCard>
 
       <div className="grid md:grid-cols-2 gap-4">

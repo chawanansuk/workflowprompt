@@ -1,10 +1,18 @@
 import React from 'react'
-import { PrimaryButton, CopyBlock, Loading, ErrorBox, SectionCard, GhostButton } from './ui.jsx'
+import { PrimaryButton, CopyBlock, Loading, ErrorBox, SectionCard, GhostButton, MissingContent } from './ui.jsx'
 
-export default function Step4Build({ buildPrompt, appName, loading, error, onRetry, onNext }) {
+export default function Step4Build({ buildPrompt, appName, loading, error, onRetry, onGenerate, onNext }) {
   if (loading) return <Loading message="กำลังประกอบ build prompt ฉบับสมบูรณ์ — ฝังกฎทุกข้อของ workflow เดิมลงไป..." />
   if (error) return <ErrorBox message={error} onRetry={onRetry} />
-  if (!buildPrompt) return null
+  if (!buildPrompt) {
+    return (
+      <MissingContent
+        message="ยังไม่มี build prompt (อาจปิดหน้าไประหว่างสร้าง หรือมีการแก้ blueprint/mockup ใหม่) — กดปุ่มด้านล่างเพื่อประกอบจากดีไซน์ล่าสุด"
+        label="🚀 สร้าง build prompt"
+        onGenerate={onGenerate}
+      />
+    )
+  }
 
   const download = () => {
     const blob = new Blob([buildPrompt], { type: 'text/plain;charset=utf-8' })

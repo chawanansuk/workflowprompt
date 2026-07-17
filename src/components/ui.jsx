@@ -65,16 +65,25 @@ export function TextArea({ value, onChange, placeholder, rows = 4, className = '
   )
 }
 
+export const OTHER = 'อื่นๆ'
+
+// Collapse a ChipGroup (preset, custom) pair into one resolved value.
+// Selecting "อื่นๆ" without typing anything resolves to '' (not the sentinel).
+export function resolveChip(preset, custom) {
+  if (preset === OTHER) return (custom || '').trim()
+  return preset || ''
+}
+
 /**
  * Preset chips — ALWAYS includes an "อื่นๆ" option revealing a short input.
  * value = selected preset label OR the custom text when "อื่นๆ" is active.
  */
 export function ChipGroup({ options, value, custom, onSelect, otherPlaceholder = 'ระบุเอง...' }) {
-  const isOther = value === 'อื่นๆ'
+  const isOther = value === OTHER
   return (
     <div>
       <div className="flex flex-wrap gap-2">
-        {[...options, 'อื่นๆ'].map((opt) => (
+        {[...options, OTHER].map((opt) => (
           <button
             key={opt}
             onClick={() => onSelect(opt, '')}
@@ -89,28 +98,78 @@ export function ChipGroup({ options, value, custom, onSelect, otherPlaceholder =
       </div>
       {isOther && (
         <div className="mt-2 animate-rise">
-          <TextInput value={custom || ''} onChange={(v) => onSelect('อื่นๆ', v)} placeholder={otherPlaceholder} />
+          <TextInput value={custom || ''} onChange={(v) => onSelect(OTHER, v)} placeholder={otherPlaceholder} />
         </div>
       )}
     </div>
   )
 }
 
+/**
+ * Shared revision panel: preset chips (+ อื่นๆ) with a free notes field.
+ * Submit is enabled only when the combined revision text is non-empty.
+ */
+export function RevisionForm({ icon = '🛠', title, presets, notesPlaceholder, submitLabel, onSubmit, onCancel }) {
+  const [preset, setPreset] = useState('')
+  const [custom, setCustom] = useState('')
+  const [notes, setNotes] = useState('')
+
+  const resolved = resolveChip(preset, custom)
+  const combined = [resolved, notes.trim()].filter(Boolean).join(' — ')
+
+  return (
+    <SectionCard icon={icon} title={title} className="animate-rise">
+      <ChipGroup
+        options={presets}
+        value={preset}
+        custom={custom}
+        onSelect={(p, c) => { setPreset(p); setCustom(c) }}
+        otherPlaceholder="ระบุสิ่งที่อยากปรับ..."
+      />
+      <div className="mt-3">
+        <TextArea value={notes} onChange={setNotes} rows={3} placeholder={notesPlaceholder} />
+      </div>
+      <div className="mt-3 flex gap-3 justify-end">
+        <GhostButton onClick={onCancel}>ยกเลิก</GhostButton>
+        <PrimaryButton onClick={() => onSubmit(combined)} disabled={!combined}>
+          {submitLabel}
+        </PrimaryButton>
+      </div>
+    </SectionCard>
+  )
+}
+
+/**
+ * Shown when a step's content is missing (e.g. reload interrupted generation).
+ * Always offers a button to (re)generate instead of a dead blank screen.
+ */
+export function MissingContent({ message, label, onGenerate }) {
+  return (
+    <div className="flex flex-col items-center gap-4 py-16 text-center animate-rise">
+      <span className="text-4xl">🗒️</span>
+      <p className="text-ink-300 max-w-md">{message}</p>
+      <PrimaryButton onClick={onGenerate}>{label}</PrimaryButton>
+    </div>
+  )
+}
+
 export function CopyBlock({ text, label = 'คัดลอก prompt' }) {
-  const [copied, setCopied] = useState(false)
+  const [status, setStatus] = useState('') // '' | 'copied' | 'failed'
   const copy = async () => {
+    let ok = false
     try {
       await navigator.clipboard.writeText(text)
+      ok = true
     } catch {
       const ta = document.createElement('textarea')
       ta.value = text
       document.body.appendChild(ta)
       ta.select()
-      document.execCommand('copy')
+      ok = document.execCommand('copy')
       ta.remove()
     }
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    setStatus(ok ? 'copied' : 'failed')
+    setTimeout(() => setStatus(''), 2500)
   }
   return (
     <div className="rounded-2xl border border-ink-600 bg-ink-900 overflow-hidden">
@@ -119,9 +178,11 @@ export function CopyBlock({ text, label = 'คัดลอก prompt' }) {
         <button
           onClick={copy}
           className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition active:scale-95
-            ${copied ? 'bg-mint-400/20 text-mint-400' : 'bg-brand-600 text-white hover:bg-brand-500'}`}
+            ${status === 'copied' ? 'bg-mint-400/20 text-mint-400'
+              : status === 'failed' ? 'bg-red-400/20 text-red-300'
+              : 'bg-brand-600 text-white hover:bg-brand-500'}`}
         >
-          {copied ? '✓ คัดลอกแล้ว' : `📋 ${label}`}
+          {status === 'copied' ? '✓ คัดลอกแล้ว' : status === 'failed' ? '✕ คัดลอกไม่สำเร็จ — เลือกข้อความเอง' : `📋 ${label}`}
         </button>
       </div>
       <pre className="p-4 text-[13px] leading-relaxed text-ink-100 font-mono whitespace-pre-wrap max-h-96 overflow-y-auto scroll-thin">{text}</pre>

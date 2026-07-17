@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { PrimaryButton, GhostButton, TextArea, ChipGroup, Loading, ErrorBox, SectionCard } from './ui.jsx'
+import { PrimaryButton, GhostButton, Loading, ErrorBox, SectionCard, RevisionForm, MissingContent } from './ui.jsx'
 
 const CONTROL_COLORS = {
   'ปุ่ม': 'bg-brand-600/20 text-brand-400 border-brand-400/30',
@@ -14,25 +14,19 @@ const CONTROL_COLORS = {
 
 const REVISION_PRESETS = ['เปลี่ยนโทนสี/ธีม', 'ลดจำนวนหน้าจอลง', 'ตัดฟีเจอร์ให้ MVP เล็กลง', 'เปลี่ยนชื่อแอป']
 
-export default function Step2Blueprint({ blueprint, loading, error, onRetry, onApprove, onRevise }) {
+export default function Step2Blueprint({ blueprint, loading, error, onRetry, onGenerate, onApprove, onRevise }) {
   const [revising, setRevising] = useState(false)
-  const [preset, setPreset] = useState('')
-  const [custom, setCustom] = useState('')
-  const [notes, setNotes] = useState('')
 
   if (loading) return <Loading message="ดีไซเนอร์กำลังแกะ workflow และร่างพิมพ์เขียวแอปทั้งระบบ... (ราว 20–40 วินาที)" />
   if (error) return <ErrorBox message={error} onRetry={onRetry} />
-  if (!blueprint) return null
-
-  const submitRevision = () => {
-    const parts = []
-    if (preset && preset !== 'อื่นๆ') parts.push(preset)
-    if (preset === 'อื่นๆ' && custom) parts.push(custom)
-    if (notes.trim()) parts.push(notes.trim())
-    if (parts.length === 0) return
-    setRevising(false)
-    setPreset(''); setCustom(''); setNotes('')
-    onRevise(parts.join(' — '))
+  if (!blueprint) {
+    return (
+      <MissingContent
+        message="ยังไม่มี blueprint สำหรับ workflow นี้ (อาจปิดหน้าไประหว่างสร้าง) — กดปุ่มด้านล่างเพื่อวิเคราะห์และออกแบบใหม่ได้เลย"
+        label="🔍 วิเคราะห์ + ออกแบบแอป"
+        onGenerate={onGenerate}
+      />
+    )
   }
 
   return (
@@ -44,9 +38,9 @@ export default function Step2Blueprint({ blueprint, loading, error, onRetry, onA
 
       <SectionCard icon="💡" title="คอนเซ็ปต์แอป">
         <div className="text-xl font-bold bg-gradient-to-r from-brand-400 to-glow-400 bg-clip-text text-transparent">
-          {blueprint.appConcept.name}
+          {blueprint.appConcept?.name}
         </div>
-        <p className="text-ink-100/90 mt-1">{blueprint.appConcept.positioning}</p>
+        <p className="text-ink-100/90 mt-1">{blueprint.appConcept?.positioning}</p>
       </SectionCard>
 
       <SectionCard icon="🖥️" title={`หน้าจอทั้งหมด (${blueprint.screens.length} หน้าจอ)`}>
@@ -59,7 +53,7 @@ export default function Step2Blueprint({ blueprint, loading, error, onRetry, onA
               </div>
               <p className="text-sm text-ink-300 mt-1.5">{s.purpose}</p>
               <div className="mt-3 space-y-1.5">
-                {s.controls.map((c, j) => (
+                {(s.controls || []).map((c, j) => (
                   <div key={j} className="flex items-start gap-2 text-sm">
                     <span className={`shrink-0 px-2 py-0.5 rounded-md border text-xs font-medium ${CONTROL_COLORS[c.type] || CONTROL_COLORS['ช่องกรอก']}`}>
                       [{c.type}]
@@ -133,24 +127,14 @@ export default function Step2Blueprint({ blueprint, loading, error, onRetry, onA
           <PrimaryButton onClick={onApprove}>✅ อนุมัติดีไซน์นี้ → ไปขั้น 3 (Mockup)</PrimaryButton>
         </div>
       ) : (
-        <SectionCard icon="🛠" title="อยากปรับตรงไหน?" className="animate-rise">
-          <ChipGroup
-            options={REVISION_PRESETS}
-            value={preset}
-            custom={custom}
-            onSelect={(p, c) => { setPreset(p); setCustom(c) }}
-            otherPlaceholder="ระบุสิ่งที่อยากปรับ..."
-          />
-          <div className="mt-3">
-            <TextArea value={notes} onChange={setNotes} rows={3} placeholder="รายละเอียดเพิ่มเติม (ถ้ามี) เช่น หน้าจอที่ 2 อยากให้รวมกับหน้าจอที่ 3..." />
-          </div>
-          <div className="mt-3 flex gap-3 justify-end">
-            <GhostButton onClick={() => setRevising(false)}>ยกเลิก</GhostButton>
-            <PrimaryButton onClick={submitRevision} disabled={!notes.trim() && !preset}>
-              🔄 ปรับ blueprint ตามนี้
-            </PrimaryButton>
-          </div>
-        </SectionCard>
+        <RevisionForm
+          title="อยากปรับตรงไหน?"
+          presets={REVISION_PRESETS}
+          notesPlaceholder="รายละเอียดเพิ่มเติม (ถ้ามี) เช่น หน้าจอที่ 2 อยากให้รวมกับหน้าจอที่ 3..."
+          submitLabel="🔄 ปรับ blueprint ตามนี้"
+          onCancel={() => setRevising(false)}
+          onSubmit={(notes) => { setRevising(false); onRevise(notes) }}
+        />
       )}
     </div>
   )

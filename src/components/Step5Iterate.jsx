@@ -1,16 +1,17 @@
-import React, { useState } from 'react'
-import { PrimaryButton, GhostButton, TextArea, CopyBlock, Loading, ErrorBox, SectionCard, UploadZone, ChipGroup } from './ui.jsx'
+import React, { useMemo, useState } from 'react'
+import { PrimaryButton, GhostButton, TextArea, CopyBlock, Loading, ErrorBox, SectionCard, UploadZone, ChipGroup, resolveChip } from './ui.jsx'
 
 const CATEGORIES = ['🐛 บั๊ก / ทำงานผิด', '🎨 ปรับดีไซน์', '➕ เพิ่มฟีเจอร์', '✏️ แก้ข้อความ/copy']
 
-export default function Step5Iterate({ history, loading, error, onRetry, onGenerate, onFinish, finished, onRestart }) {
+export default function Step5Iterate({ history, loading, error, onRetry, onGenerate, onFinish, onUnfinish, finished, onRestart }) {
   const [preset, setPreset] = useState('')
   const [custom, setCustom] = useState('')
   const [request, setRequest] = useState('')
   const [screenshot, setScreenshot] = useState(null)
 
-  const category = preset === 'อื่นๆ' ? (custom || 'อื่นๆ') : preset
-  const ready = request.trim().length > 0 && category
+  const category = resolveChip(preset, custom)
+  const ready = request.trim().length > 0 && Boolean(category)
+  const reversed = useMemo(() => [...history].reverse(), [history])
 
   const submit = () => {
     onGenerate({ category, request: request.trim(), screenshot })
@@ -26,7 +27,10 @@ export default function Step5Iterate({ history, loading, error, onRetry, onGener
         <p className="text-ink-300 max-w-md mx-auto">
           จาก workflow prompt หนึ่งก้อน กลายเป็นเว็บแอปเต็มรูปแบบ — ผ่านการออกแบบ, mockup, build และ iterate จนพอใจ
         </p>
-        <PrimaryButton onClick={onRestart}>🆕 เริ่มโปรเจกต์ใหม่</PrimaryButton>
+        <div className="flex flex-wrap gap-3 justify-center">
+          <GhostButton onClick={onUnfinish}>↩️ กลับไปแก้ต่อ (Iterate)</GhostButton>
+          <PrimaryButton onClick={onRestart}>🆕 เริ่มโปรเจกต์ใหม่</PrimaryButton>
+        </div>
       </div>
     )
   }
@@ -76,7 +80,7 @@ export default function Step5Iterate({ history, loading, error, onRetry, onGener
       {history.length > 0 && (
         <div className="space-y-4">
           <h2 className="font-semibold text-ink-100">📚 Follow-up prompts ที่สร้างไว้ ({history.length} รอบ)</h2>
-          {[...history].reverse().map((h, i) => (
+          {reversed.map((h, i) => (
             <div key={history.length - 1 - i} className="space-y-2 animate-rise">
               <div className="text-sm text-ink-300">
                 <span className="px-2 py-0.5 rounded-md bg-ink-800 border border-ink-600 text-xs mr-2">รอบที่ {history.length - i}</span>

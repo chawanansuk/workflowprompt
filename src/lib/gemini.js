@@ -12,13 +12,18 @@ export function getApiKey() {
 }
 
 export function setApiKey(key) {
-  if (key) localStorage.setItem(KEY_STORAGE, key.trim())
+  if (key && key.trim()) localStorage.setItem(KEY_STORAGE, key.trim())
   else localStorage.removeItem(KEY_STORAGE)
+  cachedClient = null
+  cachedKey = ''
 }
 
 export function hasApiKey() {
   return Boolean(getApiKey())
 }
+
+let cachedClient = null
+let cachedKey = ''
 
 function client() {
   const apiKey = getApiKey()
@@ -27,7 +32,11 @@ function client() {
     err.code = 'NO_API_KEY'
     throw err
   }
-  return new GoogleGenAI({ apiKey })
+  if (!cachedClient || cachedKey !== apiKey) {
+    cachedClient = new GoogleGenAI({ apiKey })
+    cachedKey = apiKey
+  }
+  return cachedClient
 }
 
 function stripCodeFences(text) {
@@ -45,7 +54,11 @@ export function parseJsonLoose(text) {
     const start = t.indexOf('{')
     const end = t.lastIndexOf('}')
     if (start >= 0 && end > start) {
-      return JSON.parse(t.slice(start, end + 1))
+      try {
+        return JSON.parse(t.slice(start, end + 1))
+      } catch {
+        throw new Error('PARSE_FAILED')
+      }
     }
     throw new Error('PARSE_FAILED')
   }
@@ -108,17 +121,46 @@ export function friendlyError(err) {
   if (err?.code === 'NO_API_KEY' || msg.includes('NO_API_KEY')) {
     return 'ยังไม่ได้ใส่ Gemini API Key — กดปุ่ม "🔑 API Key" มุมขวาบนเพื่อตั้งค่าก่อนนะครับ'
   }
-  if (msg.includes('API key not valid') || msg.includes('API_KEY_INVALID') || msg.includes('403')) {
+
+  // @google/genai throws ApiError with a numeric status — trust it over string matching.
+  const status = typeof err?.status === 'number' ? err.status : null
+  if (status === 400 || status === 401 || status === 403) {
     return 'API Key ไม่ถูกต้องหรือหมดสิทธิ์ใช้งาน — ลองตรวจสอบ key ที่ aistudio.google.com/apikey'
   }
-  if (msg.includes('429') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('resource_exhausted')) {
+  if (status === 429) {
     return 'เรียกใช้งานถี่เกินโควต้าชั่วคราว — พักสักครู่แล้วกด "ลองใหม่" อีกครั้ง'
   }
+  if (status !== null && status >= 500) {
+    return 'ฝั่งเซิร์ฟเวอร์ Gemini ขัดข้องชั่วคราว — กด "ลองใหม่" อีกครั้ง'
+  }
+
   if (msg.includes('PARSE_FAILED') || msg.includes('EMPTY_RESPONSE')) {
     return 'AI ตอบกลับมาในรูปแบบที่อ่านไม่ได้ — กด "ลองใหม่" เพื่อให้สร้างคำตอบอีกครั้ง'
+  }
+  if (msg.includes('NO_IMAGE_RETURNED')) {
+    return 'Gemini ไม่ได้ส่งรูปกลับมา (key อาจไม่รองรับโมเดลสร้างภาพ) — ใช้เส้นทาง ChatGPT ตามวิธีใช้ด้านบนแทนได้เลย'
+  }
+  if (msg.includes('API key not valid') || msg.includes('API_KEY_INVALID')) {
+    return 'API Key ไม่ถูกต้องหรือหมดสิทธิ์ใช้งาน — ลองตรวจสอบ key ที่ aistudio.google.com/apikey'
+  }
+  if (msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('resource_exhausted')) {
+    return 'เรียกใช้งานถี่เกินโควต้าชั่วคราว — พักสักครู่แล้วกด "ลองใหม่" อีกครั้ง'
   }
   if (msg.toLowerCase().includes('fetch') || msg.toLowerCase().includes('network')) {
     return 'เชื่อมต่ออินเทอร์เน็ตไม่สำเร็จ — ตรวจสอบการเชื่อมต่อแล้วกด "ลองใหม่"'
   }
   return `เกิดข้อผิดพลาด: ${msg.slice(0, 160)} — กด "ลองใหม่" ได้เลย`
+}
+
+// Guard against non-conforming model output before it reaches the UI.
+export function validateBlueprint(b) {
+  return Boolean(
+    b &&
+    b.appConcept?.name &&
+    Array.isArray(b.screens) && b.screens.length > 0 &&
+    b.screens.every((s) => s && Array.isArray(s.controls)) &&
+    Array.isArray(b.aiCalls) &&
+    b.designSystem && Array.isArray(b.designSystem.palette) &&
+    b.mvp && Array.isArray(b.mvp.included) && Array.isArray(b.mvp.excluded)
+  )
 }

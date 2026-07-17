@@ -1,30 +1,26 @@
 import React, { useState } from 'react'
-import { PrimaryButton, GhostButton, TextArea, CopyBlock, Loading, ErrorBox, SectionCard, UploadZone, ChipGroup } from './ui.jsx'
+import { PrimaryButton, GhostButton, CopyBlock, Loading, ErrorBox, SectionCard, UploadZone, RevisionForm, MissingContent } from './ui.jsx'
 
 const MOCKUP_REVISION_PRESETS = ['สีเพี้ยนจากที่ตั้งใจ', 'เลย์เอาต์แน่น/รกไป', 'อยากได้อารมณ์หรูขึ้น', 'สัดส่วนหน้าจอไม่สมจริง']
 
 export default function Step3Mockup({
-  mockupPrompt, mockupImage, loading, imageLoading, error,
-  onRetry, onSetImage, onGenerateInApp, onApprove, onRevise,
+  mockupPrompt, mockupImage, loading, imageLoading, error, imageError,
+  onRetry, onGenerate, onSetImage, onGenerateInApp, onApprove, onRevise,
 }) {
   const [revising, setRevising] = useState(false)
-  const [preset, setPreset] = useState('')
-  const [custom, setCustom] = useState('')
-  const [notes, setNotes] = useState('')
 
   if (loading) return <Loading message="กำลังเขียน image prompt ระดับ Dribbble ให้... " />
-  if (error) return <ErrorBox message={error} onRetry={onRetry} />
-  if (!mockupPrompt) return null
-
-  const submitRevision = () => {
-    const parts = []
-    if (preset && preset !== 'อื่นๆ') parts.push(preset)
-    if (preset === 'อื่นๆ' && custom) parts.push(custom)
-    if (notes.trim()) parts.push(notes.trim())
-    if (parts.length === 0) return
-    setRevising(false)
-    setPreset(''); setCustom(''); setNotes('')
-    onRevise(parts.join(' — '))
+  // A global error with no prompt on screen is fatal for this step; once a
+  // prompt exists, errors render inline so the copy-paste path stays usable.
+  if (error && !mockupPrompt) return <ErrorBox message={error} onRetry={onRetry} />
+  if (!mockupPrompt) {
+    return (
+      <MissingContent
+        message="ยังไม่มี image prompt (อาจปิดหน้าไประหว่างสร้าง) — กดปุ่มด้านล่างเพื่อสร้างจาก blueprint ที่อนุมัติไว้"
+        label="🖼️ สร้าง image prompt"
+        onGenerate={onGenerate}
+      />
+    )
   }
 
   return (
@@ -33,6 +29,8 @@ export default function Step3Mockup({
         <h1 className="text-2xl font-bold text-ink-100">ขั้นที่ 3 · Mockup ภาพ UI</h1>
         <p className="text-ink-300 mt-1">เห็นก่อนสร้างจริง — เอา prompt นี้ไปสร้างภาพ แล้วนำภาพกลับมาอนุมัติที่นี่</p>
       </header>
+
+      {error && <ErrorBox message={error} onRetry={onRetry} />}
 
       <CopyBlock text={mockupPrompt} label="คัดลอก image prompt" />
 
@@ -53,6 +51,7 @@ export default function Step3Mockup({
       </SectionCard>
 
       <SectionCard icon="🖼️" title="ภาพ mockup ที่สร้างได้">
+        {imageError && <div className="mb-3"><ErrorBox message={imageError} onRetry={onGenerateInApp} /></div>}
         {imageLoading
           ? <Loading message="Gemini กำลังวาด mockup... (ราว 15–30 วินาที)" />
           : <UploadZone image={mockupImage} onImage={onSetImage} onClear={() => onSetImage(null)} label="อัปโหลดภาพ mockup ที่สร้างได้มาที่นี่" />}
@@ -68,25 +67,21 @@ export default function Step3Mockup({
         </div>
       )}
 
+      {!mockupImage && !revising && (
+        <div className="text-center">
+          <GhostButton onClick={() => setRevising(true)} className="text-sm">🛠 ยังไม่มีภาพ แต่อยากปรับ image prompt ก่อน</GhostButton>
+        </div>
+      )}
+
       {revising && (
-        <SectionCard icon="🛠" title="อยากปรับจุดไหนในภาพ?" className="animate-rise">
-          <ChipGroup
-            options={MOCKUP_REVISION_PRESETS}
-            value={preset}
-            custom={custom}
-            onSelect={(p, c) => { setPreset(p); setCustom(c) }}
-            otherPlaceholder="ระบุจุดที่อยากแก้..."
-          />
-          <div className="mt-3">
-            <TextArea value={notes} onChange={setNotes} rows={3} placeholder="รายละเอียด เช่น หน้าจอซ้ายบนปุ่มใหญ่ไป อยากให้พื้นหลังเข้มกว่านี้..." />
-          </div>
-          <div className="mt-3 flex gap-3 justify-end">
-            <GhostButton onClick={() => setRevising(false)}>ยกเลิก</GhostButton>
-            <PrimaryButton onClick={submitRevision} disabled={!notes.trim() && !preset}>
-              🔄 เขียน image prompt ใหม่ตามนี้
-            </PrimaryButton>
-          </div>
-        </SectionCard>
+        <RevisionForm
+          title="อยากปรับจุดไหนในภาพ?"
+          presets={MOCKUP_REVISION_PRESETS}
+          notesPlaceholder="รายละเอียด เช่น หน้าจอซ้ายบนปุ่มใหญ่ไป อยากให้พื้นหลังเข้มกว่านี้..."
+          submitLabel="🔄 เขียน image prompt ใหม่ตามนี้"
+          onCancel={() => setRevising(false)}
+          onSubmit={(notes) => { setRevising(false); onRevise(notes) }}
+        />
       )}
     </div>
   )
